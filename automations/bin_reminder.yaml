@@ -1,0 +1,66 @@
+# Midlothian Bin Collection — Evening Reminder Automation
+#
+# This automation fires every evening at 18:00 and sends a push notification
+# via the Home Assistant companion app listing which bins need to go out
+# the following morning.
+#
+# HOW TO IMPORT:
+#   Settings → Automations & Scenes → Import → paste this file
+#   — OR —
+#   Add to your automations.yaml / automations/ directory.
+#
+# BEFORE YOU USE:
+#   1. Replace "YOUR_DEVICE_ID" with your actual notify service name.
+#      Find it in Settings → Integrations → Mobile App → your device.
+#      The service will be something like: notify.mobile_app_my_iphone
+#   2. Make sure the Midlothian Bin Collection integration is installed
+#      and your sensors are showing data.
+
+alias: "Bin Collection Evening Reminder"
+description: >
+  Sends a push notification at 6 PM on the evening before any bin collection.
+  Lists all bins that are due the next morning.
+
+trigger:
+  - platform: time
+    at: "18:00:00"
+
+condition:
+  # Only run if at least one bin is being collected tomorrow
+  - condition: template
+    value_template: >
+      {{
+        state_attr('sensor.midlothian_general_waste', 'days_until') == 1
+        or state_attr('sensor.midlothian_recycling', 'days_until') == 1
+        or state_attr('sensor.midlothian_garden_waste', 'days_until') == 1
+        or state_attr('sensor.midlothian_glass_food', 'days_until') == 1
+      }}
+
+action:
+  - service: notify.mobile_app_YOUR_DEVICE_ID
+    data:
+      title: "Bin Day Tomorrow 🗑️"
+      message: >
+        {% set bins = namespace(out=[]) %}
+        {% if state_attr('sensor.midlothian_general_waste', 'days_until') == 1 %}
+          {% set bins.out = bins.out + ['Grey bin (General Waste)'] %}
+        {% endif %}
+        {% if state_attr('sensor.midlothian_recycling', 'days_until') == 1 %}
+          {% set bins.out = bins.out + ['Blue bin (Recycling)'] %}
+        {% endif %}
+        {% if state_attr('sensor.midlothian_garden_waste', 'days_until') == 1 %}
+          {% set bins.out = bins.out + ['Brown bin (Garden Waste)'] %}
+        {% endif %}
+        {% if state_attr('sensor.midlothian_glass_food', 'days_until') == 1 %}
+          {% set bins.out = bins.out + ['Purple bin (Glass & Food)'] %}
+        {% endif %}
+        Put out tonight: {{ bins.out | join(', ') }}
+      data:
+        # iOS — breaks through Do Not Disturb
+        push:
+          interruption-level: time-sensitive
+        # Android — high priority
+        priority: high
+        ttl: 0
+
+mode: single

@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Midlothian Bin Collection",
+        "description": "Enter your postcode to look up your bin collection schedule from Midlothian Council.",
+        "data": {
+          "postcode": "Postcode",
+          "address": "Address (optional, to disambiguate)"
+        }
+      },
+      "select_address": {
+        "title": "Select Your Address",
+        "description": "Multiple addresses found for that postcode. Select yours.",
+        "data": {
+          "uprn": "Address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Midlothian Council website. Check your internet connection.",
+      "invalid_postcode": "No addresses found for that postcode. Check it is a valid Midlothian postcode.",
+      "no_data": "Connected but no bin collection dates were returned. The council website may have changed.",
+      "unknown": "Unexpected error. Check the Home Assistant logs for details."
+    },
+    "abort": {
+      "already_configured": "This address is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "general_waste": {
+        "name": "General Waste Collection"
+      },
+      "recycling": {
+        "name": "Recycling Collection"
+      },
+      "garden_waste": {
+        "name": "Garden Waste Collection"
+      },
+      "glass_food": {
+        "name": "Glass & Food Collection"
+      }
+    }
+  }
+}

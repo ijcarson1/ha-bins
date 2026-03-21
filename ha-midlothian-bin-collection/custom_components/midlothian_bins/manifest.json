@@ -1,0 +1,12 @@
+{
+  "domain": "midlothian_bins",
+  "name": "Midlothian Bin Collection",
+  "version": "1.0.0",
+  "codeowners": ["@ijcarson1"],
+  "requirements": ["aiohttp>=3.8.0", "beautifulsoup4>=4.12.0"],
+  "dependencies": [],
+  "documentation": "https://github.com/ijcarson1/ha-midlothian-bin-collection",
+  "issue_tracker": "https://github.com/ijcarson1/ha-midlothian-bin-collection/issues",
+  "iot_class": "cloud_polling",
+  "config_flow": true
+}

@@ -22,7 +22,7 @@ from .const import (
     ADDRESS_LOOKUP_ID,
     BIN_LOOKUP_ID,
     PORTAL_NAME,
-    SERVICE_MAP,
+    SERVICE_RULES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -163,15 +163,13 @@ def _parse_api_rows(rows: dict) -> dict[str, date | None]:
         service = (row.get("Service") or "").lower()
         date_str = row.get("Date") or ""
 
-        # Match service name to our bin type
-        bin_type = None
-        for keyword, bt in SERVICE_MAP.items():
-            if keyword in service:
-                bin_type = bt
-                break
+        _LOGGER.debug("API row — Service: %r, Date: %r", service, date_str)
+
+        # Match service name to our bin type using ordered rules
+        bin_type = _match_service(service)
 
         if bin_type is None:
-            _LOGGER.debug("Unknown service type: %s", service)
+            _LOGGER.warning("Unknown bin service type: %r (row: %s)", service, row)
             continue
 
         # Parse date - format is "dd/MM/yyyy 00:00:00"
@@ -180,6 +178,14 @@ def _parse_api_rows(rows: dict) -> dict[str, date | None]:
             results[bin_type] = parsed
 
     return results
+
+
+def _match_service(service: str) -> str | None:
+    """Match an API service name to a bin type using SERVICE_RULES."""
+    for keywords, bin_type in SERVICE_RULES:
+        if any(kw in service for kw in keywords):
+            return bin_type
+    return None
 
 
 def _try_parse_date(text: str) -> date | None:

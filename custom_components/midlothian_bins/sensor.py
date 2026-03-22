@@ -26,6 +26,7 @@ class MidlothianBinSensor(CoordinatorEntity[MidlothianBinsCoordinator], SensorEn
         self._attr_unique_id = f"{entry.entry_id}_{bin_type}"
         self._attr_name = f"{address} {BIN_DISPLAY_NAMES[bin_type]}"
         self._attr_icon = BIN_ICONS[bin_type]
+        self._attr_entity_registry_visible_default = False
         self._attr_extra_state_attributes = {
             "bin_colour": BIN_COLOURS[bin_type],
             "bin_type": BIN_DISPLAY_NAMES[bin_type],

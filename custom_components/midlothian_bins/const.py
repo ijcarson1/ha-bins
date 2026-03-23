@@ -63,8 +63,8 @@ SERVICE_RULES: list[tuple[list[str], str]] = [
     (["grey", "residual", "general waste"], BIN_GREY),
     # Green bin – paper & card
     (["green", "paper", "card"], BIN_GREEN),
-    # Blue bin – plastics / mixed recycling
-    (["blue", "plastic", "carton", "mixed recycling"], BIN_BLUE),
+    # Blue bin – plastics / mixed recycling / generic "recycling"
+    (["blue", "plastic", "carton", "recycling"], BIN_BLUE),
     # Glass box
     (["glass"], BIN_GLASS),
     # Food caddy

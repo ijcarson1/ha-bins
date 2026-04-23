@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 import aiohttp
 
@@ -34,22 +34,19 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 
+_FETCH_WINDOW_DAYS = 56  # 8 weeks ahead
+
 
 async def _get_session_cookies(session: aiohttp.ClientSession) -> None:
     """Authenticate and initialise session cookies."""
     async with session.get(
         AUTH_URL,
         params={"hostname": "my.midlothian.gov.uk"},
-        ssl=False,
     ) as resp:
         if resp.status != 200:
             raise aiohttp.ClientError(f"Auth endpoint returned HTTP {resp.status}")
 
-    # Visit the service page to fully initialise the session
-    async with session.get(
-        f"{API_BASE}/service/Bin_Collection_Dates",
-        ssl=False,
-    ) as resp:
+    async with session.get(f"{API_BASE}/service/Bin_Collection_Dates") as resp:
         pass
 
 
@@ -74,7 +71,6 @@ async def async_lookup_addresses(postcode: str) -> list[dict[str, str]]:
                 "portal_name": PORTAL_NAME,
             },
             json=payload,
-            ssl=False,
         ) as resp:
             if resp.status != 200:
                 raise aiohttp.ClientError(f"Address lookup returned HTTP {resp.status}")
@@ -94,12 +90,11 @@ async def async_lookup_addresses(postcode: str) -> list[dict[str, str]]:
     return addresses
 
 
-async def async_fetch_bin_dates(postcode: str, uprn: str) -> dict[str, date | None]:
+async def async_fetch_bin_dates(postcode: str, uprn: str) -> dict[str, list[date]]:
     """Fetch bin collection dates via the Granicus API."""
     async with aiohttp.ClientSession(headers=HEADERS) as session:
         await _get_session_cookies(session)
 
-        # If no UPRN stored, try to look one up from postcode
         effective_uprn = uprn
         if not effective_uprn:
             addresses = await async_lookup_addresses(postcode)
@@ -108,15 +103,15 @@ async def async_fetch_bin_dates(postcode: str, uprn: str) -> dict[str, date | No
 
         if not effective_uprn:
             _LOGGER.warning("No UPRN available for postcode %s", postcode)
-            return {bt: None for bt in BIN_TYPES}
+            return {bt: [] for bt in BIN_TYPES}
 
-        today_str = date.today().isoformat()
-
+        today = date.today()
         payload = {
             "formValues": {
                 "Section 1": {
                     "uprn": {"value": str(effective_uprn)},
-                    "fromDate": {"value": today_str},
+                    "fromDate": {"value": today.isoformat()},
+                    "toDate": {"value": (today + timedelta(days=_FETCH_WINDOW_DAYS)).isoformat()},
                 },
             },
         }
@@ -129,7 +124,6 @@ async def async_fetch_bin_dates(postcode: str, uprn: str) -> dict[str, date | No
                 "portal_name": PORTAL_NAME,
             },
             json=payload,
-            ssl=False,
         ) as resp:
             if resp.status != 200:
                 raise UpdateFailed(f"Bin lookup returned HTTP {resp.status}")
@@ -147,14 +141,14 @@ async def async_fetch_bin_dates(postcode: str, uprn: str) -> dict[str, date | No
             effective_uprn,
             data,
         )
-        return {bt: None for bt in BIN_TYPES}
+        return {bt: [] for bt in BIN_TYPES}
 
     return _parse_api_rows(rows)
 
 
-def _parse_api_rows(rows: dict) -> dict[str, date | None]:
-    """Parse the API rows_data into bin type -> next collection date."""
-    results: dict[str, date | None] = {bt: None for bt in BIN_TYPES}
+def _parse_api_rows(rows: dict) -> dict[str, list[date]]:
+    """Parse the API rows_data into bin type -> sorted list of upcoming collection dates."""
+    results: dict[str, list[date]] = {bt: [] for bt in BIN_TYPES}
 
     for _key, row in rows.items():
         if not isinstance(row, dict):
@@ -165,17 +159,18 @@ def _parse_api_rows(rows: dict) -> dict[str, date | None]:
 
         _LOGGER.debug("API row — Service: %r, Date: %r", service, date_str)
 
-        # Match service name to our bin type using ordered rules
         bin_type = _match_service(service)
 
         if bin_type is None:
             _LOGGER.warning("Unknown bin service type: %r (row: %s)", service, row)
             continue
 
-        # Parse date - format is "dd/MM/yyyy 00:00:00"
         parsed = _try_parse_date(date_str)
-        if parsed and (results[bin_type] is None or parsed < results[bin_type]):
-            results[bin_type] = parsed
+        if parsed:
+            results[bin_type].append(parsed)
+
+    for bin_type in results:
+        results[bin_type] = sorted(set(results[bin_type]))
 
     return results
 
@@ -199,13 +194,13 @@ def _try_parse_date(text: str) -> date | None:
     return None
 
 
-class MidlothianBinsCoordinator(DataUpdateCoordinator[dict[str, date | None]]):
+class MidlothianBinsCoordinator(DataUpdateCoordinator[dict[str, list[date]]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=SCAN_INTERVAL)
         self._postcode: str = entry.data[CONF_POSTCODE]
         self._uprn: str = entry.data.get(CONF_UPRN, "")
 
-    async def _async_update_data(self) -> dict[str, date | None]:
+    async def _async_update_data(self) -> dict[str, list[date]]:
         try:
             return await async_fetch_bin_dates(self._postcode, self._uprn)
         except aiohttp.ClientError as err:

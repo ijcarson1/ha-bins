@@ -51,14 +51,7 @@ class MidlothianBinCalendar(
         self._attr_name = f"{address} {BIN_DISPLAY_NAMES[bin_type]} Collection"
         self._attr_icon = BIN_ICONS[bin_type]
 
-    @property
-    def event(self) -> CalendarEvent | None:
-        """Return the next upcoming calendar event for this bin."""
-        if self.coordinator.data is None:
-            return None
-        collection_date: date | None = self.coordinator.data.get(self._bin_type)
-        if collection_date is None:
-            return None
+    def _make_event(self, collection_date: date) -> CalendarEvent:
         return CalendarEvent(
             summary=f"{BIN_DISPLAY_NAMES[self._bin_type]} bin collection",
             start=collection_date,
@@ -66,23 +59,25 @@ class MidlothianBinCalendar(
             description=f"{BIN_COLOURS[self._bin_type]} bin – {self._address}",
         )
 
+    @property
+    def event(self) -> CalendarEvent | None:
+        """Return the next upcoming calendar event for this bin."""
+        if self.coordinator.data is None:
+            return None
+        dates: list[date] = self.coordinator.data.get(self._bin_type, [])
+        return self._make_event(dates[0]) if dates else None
+
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime
     ) -> list[CalendarEvent]:
-        """Return events within a date range (used by the calendar card)."""
+        """Return all events within a date range (used by the calendar card)."""
         if self.coordinator.data is None:
             return []
-        collection_date: date | None = self.coordinator.data.get(self._bin_type)
-        if collection_date is None:
-            return []
-        # Only return the event if it falls within the requested range
-        if start_date.date() <= collection_date <= end_date.date():
-            return [
-                CalendarEvent(
-                    summary=f"{BIN_DISPLAY_NAMES[self._bin_type]} bin collection",
-                    start=collection_date,
-                    end=collection_date + timedelta(days=1),
-                    description=f"{BIN_COLOURS[self._bin_type]} bin – {self._address}",
-                )
-            ]
-        return []
+        dates: list[date] = self.coordinator.data.get(self._bin_type, [])
+        range_start = start_date.date()
+        range_end = end_date.date()
+        return [
+            self._make_event(d)
+            for d in dates
+            if range_start <= d <= range_end
+        ]
